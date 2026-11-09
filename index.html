@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tafel van 3">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef1f4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Tafel van 3</title>
+<style>
+/* Layout: één kolom, cockpit-instrumentgevoel; glijpad-diagram bovenaan, oefenpaneel als hoofdinstrument, rekenhulp en tabel eronder */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --fg:#13202c; --muted:#5b6876; --line:#d3dae1;
+  --path:#c0189a; --pathsoft:#f6e0f0; --ok:#137a43; --oksoft:#dcf1e4; --bad:#b4261b; --badsoft:#f8e1de;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Barlow",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d141b; --panel:#141e28; --fg:#e4ebf1; --muted:#8d9aa8; --line:#26333f;
+  --path:#ff5fd2; --pathsoft:#3a1832; --ok:#4fd18a; --oksoft:#123323; --bad:#ff7a6b; --badsoft:#3b1915; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d141b; --panel:#141e28; --fg:#e4ebf1; --muted:#8d9aa8; --line:#26333f;
+  --path:#ff5fd2; --pathsoft:#3a1832; --ok:#4fd18a; --oksoft:#123323; --bad:#ff7a6b; --badsoft:#3b1915; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header h1{font-family:var(--display);font-weight:700;font-size:clamp(2.2rem,7vw,3.2rem);line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
+header h1 span{color:var(--path)}
+header p{margin:8px 0 0;color:var(--muted);max-width:60ch}
+.rule{display:flex;flex-wrap:wrap;gap:10px}
+.chip{font-family:var(--mono);font-size:.9rem;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.chip b{color:var(--path)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+h2{font-family:var(--display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 12px;color:var(--muted)}
+svg text{font-family:var(--mono)}
+.diag{overflow-x:auto}
+.diag svg{display:block;width:100%;min-width:520px;height:auto}
+
+/* oefenen */
+.modes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:600 .95rem var(--body);background:transparent;color:var(--fg);border:0;padding:8px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--path);color:#fff}
+button:focus-visible,input:focus-visible{outline:2px solid var(--path);outline-offset:2px}
+.q{display:grid;gap:4px;padding:14px 0 6px}
+.q .lbl{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-size:.95rem}
+.q .val{font-family:var(--mono);font-weight:700;font-size:clamp(2.2rem,9vw,3.4rem);line-height:1.05;font-variant-numeric:tabular-nums}
+.q .val small{font-size:.45em;color:var(--muted);font-weight:500;margin-left:.3em}
+.ans{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.ans .field{flex:1 1 180px;display:flex;align-items:center;border:2px solid var(--line);border-radius:8px;background:var(--bg);padding:0 12px}
+.ans input{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:700 1.6rem var(--mono);padding:10px 0;outline:none}
+.ans .unit{font-family:var(--mono);color:var(--muted)}
+.btn{font:600 1rem var(--body);border-radius:8px;border:0;padding:12px 18px;cursor:pointer;background:var(--fg);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.fb{margin-top:12px;border-radius:8px;padding:12px 14px;display:none}
+.fb.show{display:block}
+.fb.ok{background:var(--oksoft);color:var(--ok)}
+.fb.bad{background:var(--badsoft);color:var(--bad)}
+.fb .steps{font-family:var(--mono);font-size:.92rem;color:var(--fg);margin-top:4px}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.stat{display:grid}
+.stat span{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:.8rem;color:var(--muted)}
+.stat b{font-family:var(--mono);font-size:1.25rem;font-variant-numeric:tabular-nums}
+
+/* rekenhulp */
+.calc{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:560px){.calc{grid-template-columns:1fr}}
+.calc label{display:grid;gap:6px;font-weight:600}
+.calc .field{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:0 10px}
+.calc input{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:700 1.2rem var(--mono);padding:8px 0;outline:none}
+.calc .out{font-family:var(--mono);font-size:.92rem;color:var(--muted);min-height:3em}
+.calc .out b{color:var(--path);font-size:1.1rem}
+
+/* tabel */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tr.hl td{background:var(--pathsoft)}
+.thrset{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end}
+.thrset label{display:grid;gap:6px;font-weight:600}
+.thrset .field{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:0 10px;width:180px}
+.thrset input[type=text],.thrset #thrElev{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:700 1.2rem var(--mono);padding:8px 0;outline:none}
+.thrset .chk{display:flex;align-items:center;gap:8px;font-weight:500;padding-bottom:10px;cursor:pointer}
+.thrset .chk input{width:18px;height:18px;accent-color:var(--path)}
+.q .thr{font-family:var(--mono);font-size:1rem;color:var(--ok);font-weight:700}
+.note{color:var(--muted);font-size:.9rem;margin:10px 0 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Tafel van 3 <span>· 300 ft per NM</span></h1>
+    <p>Op een glijpad van 3° zak je ongeveer 300 voet per zeemijl, gerekend vanaf de runway threshold (THR, 0 NM = 0 ft). Oefen de omrekening tot je hem zonder nadenken uit je hoofd doet.</p>
+  </header>
+
+  <div class="rule" aria-label="Vuistregels">
+    <div class="chip">NM → ft: <b>× 3</b>, dan <b>+ 00</b></div>
+    <div class="chip">ft → NM: <b>− 00</b>, dan <b>÷ 3</b></div>
+    <div class="chip">1 NM = <b>300 ft</b></div>
+  </div>
+
+  <section aria-labelledby="h-thr">
+    <h2 id="h-thr">Runway threshold-hoogte</h2>
+    <div class="thrset">
+      <label for="thrElev">THR-elevatie
+        <div class="field"><input id="thrElev" inputmode="numeric" value="0"><span class="unit">ft AMSL</span></div>
+      </label>
+      <label class="chk" for="thrRand"><input type="checkbox" id="thrRand"> Willekeurige THR-hoogte bij het oefenen</label>
+    </div>
+    <p class="note">Alle hoogtes zijn AMSL. Hoogte op het glijpad (AMSL) = THR-elevatie + (NM × 300). Andersom: eerst de THR-elevatie eraf, dan twee nullen eraf en delen door 3. Deze hoogte geldt voor de tekening, de rekenhulp en de tafel.</p>
+  </section>
+
+  <section aria-labelledby="h-path">
+    <h2 id="h-path">Glijpad 3°</h2>
+    <div class="diag"><svg id="path" viewBox="0 0 640 210" role="img" aria-label="Glijpad: elke zeemijl verder van de baan is 300 voet hoger"></svg></div>
+  </section>
+
+  <section aria-labelledby="h-drill">
+    <h2 id="h-drill">Oefenen</h2>
+    <div class="modes">
+      <div class="seg" role="group" aria-label="Richting">
+        <button type="button" data-mode="nm2ft" aria-pressed="false">NM → ft</button>
+        <button type="button" data-mode="ft2nm" aria-pressed="false">ft → NM</button>
+        <button type="button" data-mode="mix" aria-pressed="true">Mix</button>
+      </div>
+      <div class="seg" role="group" aria-label="Niveau">
+        <button type="button" data-lvl="1" aria-pressed="true">Tafel (1–12)</button>
+        <button type="button" data-lvl="2" aria-pressed="false">Tot 40 NM</button>
+        <button type="button" data-lvl="3" aria-pressed="false">Ronde hoogtes</button>
+      </div>
+    </div>
+
+    <div class="q" aria-live="polite">
+      <div class="lbl" id="qlbl">Hoeveel voet is</div>
+      <div class="val" id="qval">7<small>NM</small></div>
+      <div class="thr" id="qthr"></div>
+    </div>
+
+    <form class="ans" id="form" autocomplete="off">
+      <div class="field"><input id="answer" inputmode="numeric" pattern="[0-9.,]*" aria-label="Je antwoord" placeholder="?"><span class="unit" id="aunit">ft</span></div>
+      <button class="btn" type="submit" id="go">Check</button>
+      <button class="btn ghost" type="button" id="skip">Toon antwoord</button>
+    </form>
+    <div class="fb" id="fb" role="status"></div>
+
+    <div class="stats">
+      <div class="stat"><span>Goed</span><b id="sOk">0</b></div>
+      <div class="stat"><span>Fout</span><b id="sBad">0</b></div>
+      <div class="stat"><span>Reeks</span><b id="sStreak">0</b></div>
+      <div class="stat"><span>Beste reeks</span><b id="sBest">0</b></div>
+      <div class="stat"><span>Gem. tijd</span><b id="sTime">–</b></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-calc">
+    <h2 id="h-calc">Rekenhulp</h2>
+    <div class="calc">
+      <label for="cNm">Afstand in NM
+        <div class="field"><input id="cNm" inputmode="decimal" value="12"><span class="unit">NM</span></div>
+        <div class="out" id="oNm"></div>
+      </label>
+      <label for="cFt">Hoogte in ft AMSL
+        <div class="field"><input id="cFt" inputmode="numeric" value="4500"><span class="unit">ft AMSL</span></div>
+        <div class="out" id="oFt"></div>
+      </label>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tbl">
+    <h2 id="h-tbl">De tafel</h2>
+    <div class="tbl"><table id="tbl"><thead><tr><th>NM</th><th>ft AMSL</th><th>NM</th><th>ft AMSL</th><th>NM</th><th>ft AMSL</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">Afstand in NM tot de threshold; de hoogtes zijn AMSL (inclusief de THR-elevatie). Gemarkeerd: ankerpunten om van uit te rekenen. 10 NM = 3000 ft, 20 NM = 6000 ft, 30 NM = 9000 ft boven de threshold.</p>
+  </section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>Math.round(n).toLocaleString('nl-NL');
+const fmtNm=n=>(Math.round(n*10)/10).toLocaleString('nl-NL');
+
+const getElev=()=>{const v=parseFloat(($('thrElev').value||'0').replace(/\./g,'').replace(',','.'));return isNaN(v)?0:v};
+
+/* glijpad-diagram */
+function drawPath(){
+  const E=getElev();
+  const s=$('path');s.innerHTML='';const W=640,H=210,L=40,R=600,T=20,B=170,n=10,ns='http://www.w3.org/2000/svg';
+  const x=nm=>R-(nm/n)*(R-L), y=nm=>B-(nm/n)*(B-T);
+  const el=(t,a,txt)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;s.appendChild(e);return e};
+  el('line',{x1:L,y1:B,x2:R+20,y2:B,stroke:'var(--line)','stroke-width':2});
+  el('rect',{x:R,y:B-4,width:34,height:8,fill:'var(--fg)'});
+  for(let k=0;k<3;k++) el('rect',{x:R+2,y:B-3+k*2.4,width:6,height:1.2,fill:'var(--bg)'});
+  el('line',{x1:R,y1:B-12,x2:R,y2:B+8,stroke:'var(--ok)','stroke-width':2.5});
+  el('text',{x:R+4,y:B-16,'font-size':11,'font-weight':700,fill:'var(--ok)'},'THR '+fmt(E)+' ft AMSL');
+  el('text',{x:R,y:B+18,'text-anchor':'middle','font-size':11,'font-weight':700,fill:'var(--ok)'},'0');
+  el('text',{x:R+17,y:B+30,'text-anchor':'middle','font-size':11,fill:'var(--muted)'},'RWY');
+  for(let i=1;i<=n;i++){
+    el('line',{x1:x(i),y1:B,x2:x(i),y2:y(i),stroke:'var(--line)','stroke-dasharray':'2 3'});
+    el('circle',{cx:x(i),cy:y(i),r:3.5,fill:'var(--path)'});
+    el('text',{x:x(i),y:B+18,'text-anchor':'middle','font-size':11,fill:'var(--muted)'},i);
+    if(i%2===1||i===10) el('text',{x:x(i),y:y(i)-9,'text-anchor':'middle','font-size':11,'font-weight':700,fill:'var(--fg)'},fmt(E+i*300));
+  }
+  el('line',{x1:R,y1:B,x2:x(n),y2:y(n),stroke:'var(--path)','stroke-width':2.5});
+  el('text',{x:L,y:B+38,'font-size':11,fill:'var(--muted)'},'NM tot de threshold → hoogte in ft AMSL = THR-elevatie + NM × 300');
+}
+
+/* oefenen */
+let mode='mix',lvl=1,cur=null,tStart=0,answered=false;
+const st={ok:0,bad:0,streak:0,best:0,times:[]};
+try{const sv=JSON.parse(localStorage.getItem('t3')||'null');if(sv){Object.assign(st,sv);}}catch(e){}
+function save(){try{localStorage.setItem('t3',JSON.stringify({ok:st.ok,bad:st.bad,best:st.best,times:st.times.slice(-30)}))}catch(e){}}
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+
+function newQ(){
+  const dir=mode==='mix'?(Math.random()<.5?'nm2ft':'ft2nm'):mode;
+  let nm,ft,exact=true;
+  if(lvl===1){nm=rnd(1,12);ft=nm*300}
+  else if(lvl===2){nm=rnd(3,40);ft=nm*300}
+  else{ // ronde hoogtes: niet altijd deelbaar door 3
+    if(dir==='ft2nm'){ft=rnd(4,70)*500;nm=ft/300;exact=Number.isInteger(nm)}
+    else{nm=rnd(3,40)+(Math.random()<.3?.5:0);ft=nm*300;exact=Number.isInteger(ft)}
+  }
+  if(cur&&cur.dir===dir&&cur.nm===nm) return newQ();
+  const elev=$('thrRand').checked?rnd(0,30)*50:getElev();
+  cur={dir,nm,h:ft,ft:ft+elev,elev,exact};answered=false;
+  $('qthr').textContent=elev?`THR ${fmt(elev)} ft AMSL`:'THR 0 ft AMSL (zeeniveau)';
+  $('qlbl').textContent=dir==='nm2ft'?'Hoeveel voet hoog op':'Hoeveel NM uit voor';
+  $('qval').innerHTML=dir==='nm2ft'?fmtNm(nm)+'<small>NM</small>':fmt(ft+cur.elev)+'<small>ft AMSL</small>';
+  $('aunit').textContent=dir==='nm2ft'?'ft AMSL':'NM';
+  $('answer').value='';$('fb').className='fb';$('go').textContent='Check';
+  $('answer').focus({preventScroll:true});
+  tStart=performance.now();
+}
+function steps(q){
+  const e=q.elev;
+  if(q.dir==='nm2ft') return `${fmtNm(q.nm)} × 3 = ${fmtNm(q.nm*3)} → + 00 = ${fmt(q.h)} ft`+(e?` → + THR ${fmt(e)} = ${fmt(q.ft)} ft AMSL`:'');
+  return (e?`${fmt(q.ft)} ft AMSL − THR ${fmt(e)} = ${fmt(q.h)} → `:'')+`${fmt(q.h)} − 00 = ${fmtNm(q.h/100)} → ÷ 3 = ${fmtNm(q.nm)} NM` + (q.exact?'':`  (≈ ${Math.round(q.nm)} NM is goed genoeg)`);
+}
+function check(v){
+  if(cur.dir==='nm2ft') return Math.abs(v-cur.ft)<=(cur.exact?0:50);
+  return cur.exact?Math.abs(v-cur.nm)<1e-9:Math.abs(v-cur.nm)<=0.5+1e-9;
+}
+function render(){
+  $('sOk').textContent=st.ok;$('sBad').textContent=st.bad;$('sStreak').textContent=st.streak;$('sBest').textContent=st.best;
+  const t=st.times.slice(-20);$('sTime').textContent=t.length?(t.reduce((a,b)=>a+b,0)/t.length/1000).toFixed(1)+' s':'–';
+}
+function showFb(ok,msg){const f=$('fb');f.className='fb show '+(ok?'ok':'bad');f.innerHTML=`<strong>${msg}</strong><div class="steps">${steps(cur)}</div>`;$('go').textContent='Volgende';}
+
+$('form').addEventListener('submit',e=>{
+  e.preventDefault();
+  if(answered){newQ();return}
+  const raw=$('answer').value.trim().replace(/\./g,'').replace(',','.');
+  if(raw===''||isNaN(+raw)){$('answer').focus();return}
+  const v=+raw,ok=check(v);answered=true;
+  if(ok){st.ok++;st.streak++;st.best=Math.max(st.best,st.streak);st.times.push(performance.now()-tStart);showFb(true,'Goed!')}
+  else{st.bad++;st.streak=0;showFb(false,`Niet helemaal. Het is ${cur.dir==='nm2ft'?fmt(cur.ft)+' ft AMSL':fmtNm(cur.nm)+' NM'}.`)}
+  render();save();
+});
+$('skip').addEventListener('click',()=>{if(!answered){answered=true;st.streak=0;showFb(false,'Antwoord: '+(cur.dir==='nm2ft'?fmt(cur.ft)+' ft AMSL':fmtNm(cur.nm)+' NM'));render();save()}else newQ()});
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x===b));newQ()}));
+document.querySelectorAll('[data-lvl]').forEach(b=>b.addEventListener('click',()=>{lvl=+b.dataset.lvl;document.querySelectorAll('[data-lvl]').forEach(x=>x.setAttribute('aria-pressed',x===b));newQ()}));
+
+/* rekenhulp */
+function calc(){
+  const nm=parseFloat($('cNm').value.replace(',','.'));
+  const E=getElev();
+  $('oNm').innerHTML=isNaN(nm)?'Vul een afstand in.':`${fmtNm(nm)} × 3 = ${fmtNm(nm*3)} → ${fmt(nm*300)}`+(E?` + THR ${fmt(E)}`:'')+` → <b>${fmt(nm*300+E)} ft AMSL</b>`;
+  const ft=parseFloat($('cFt').value.replace(/\./g,'').replace(',','.'));
+  const h=ft-E;
+  $('oFt').innerHTML=isNaN(ft)?'Vul een hoogte in.':(E?`${fmt(ft)} − THR ${fmt(E)} = ${fmt(h)} → `:'')+`${fmtNm(h/100)} ÷ 3 → <b>${fmtNm(h/300)} NM</b>`;
+}
+$('cNm').addEventListener('input',calc);$('cFt').addEventListener('input',calc);
+
+/* tabel */
+function drawTable(){
+  const E=getElev(),tb=document.querySelector('#tbl tbody'),rows=10;tb.innerHTML='';
+  for(let r=1;r<=rows;r++){
+    const tr=document.createElement('tr');
+    [r,r+rows,r+2*rows].forEach(nm=>{tr.innerHTML+=`<td>${nm}</td><td>${fmt(nm*300+E)}</td>`});
+    if(r===10) tr.className='hl';
+    tb.appendChild(tr);
+  }
+}
+function onElev(){drawPath();drawTable();calc()}
+$('thrElev').addEventListener('input',onElev);
+$('thrRand').addEventListener('change',()=>newQ());
+onElev();render();newQ();
+</script>
+
+<script>
+if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+</script>
+</body>
+</html>
